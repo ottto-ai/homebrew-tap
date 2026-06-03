@@ -1,0 +1,46 @@
+name: Sync Ottto formula from stable/latest
+
+# Keeps Formula/ottto.rb in lockstep with the promoted macOS release.
+# The release pipeline publishes the authoritative formula to
+# install.ottto.net/.../stable/latest/homebrew/ottto.rb; this job pulls it and
+# commits on change so `brew install ottto-ai/tap/ottto` always matches stable.
+# Runs on a schedule (safety net) and on demand. For an immediate sync right
+# after a release promotion, trigger it with:
+#   gh workflow run sync-formula.yml -R ottto-ai/homebrew-tap
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-ottto-formula
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull published formula and commit if changed
+        env:
+          FORMULA_URL: https://install.ottto.net/ottto-local-platform/releases/stable/latest/homebrew/ottto.rb
+        run: |
+          set -euo pipefail
+          curl -fsS "$FORMULA_URL" -o /tmp/ottto.rb
+          # sanity: the published artifact must look like the Ottto formula
+          grep -q 'class Ottto < Formula' /tmp/ottto.rb || { echo "fetched formula failed sanity check" >&2; exit 1; }
+          ver="$(grep -E '^[[:space:]]*version "' /tmp/ottto.rb | head -1 | sed -E 's/.*version "([^"]+)".*/\1/')"
+          [ -n "$ver" ] || { echo "could not parse version from fetched formula" >&2; exit 1; }
+          if cmp -s /tmp/ottto.rb Formula/ottto.rb; then
+            echo "Formula already current at $ver"; exit 0
+          fi
+          cp /tmp/ottto.rb Formula/ottto.rb
+          git config user.name "ottto-release-bot"
+          git config user.email "noreply@ottto.net"
+          git add Formula/ottto.rb
+          git commit -m "ottto $ver (auto-synced from stable/latest)"
+          git push
