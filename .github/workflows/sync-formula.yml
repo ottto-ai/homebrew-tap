@@ -29,7 +29,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Pull published formula + cask and commit if changed
         env:
           FORMULA_URL: https://install.ottto.net/ottto-local-platform/releases/stable/latest/homebrew/ottto.rb
