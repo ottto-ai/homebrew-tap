@@ -1,9 +1,14 @@
-name: Sync Ottto formula from stable/latest
+name: Sync Ottto formula + cask from stable/latest
 
-# Keeps Formula/ottto.rb in lockstep with the promoted macOS release.
-# The release pipeline publishes the authoritative formula to
-# install.ottto.net/.../stable/latest/homebrew/ottto.rb; this job pulls it and
-# commits on change so `brew install ottto-ai/tap/ottto` always matches stable.
+# Keeps Formula/ottto.rb (CLI) and Casks/ottto-app.rb (macOS desktop app) in
+# lockstep with the promoted stable release.
+#   - Formula/ottto.rb: the release pipeline publishes the authoritative formula
+#     to install.ottto.net/.../stable/latest/homebrew/ottto.rb; we pull it and
+#     commit on change so `brew install ottto-ai/tap/ottto` always matches stable.
+#   - Casks/ottto-app.rb: there is no published cask artifact, so we resolve the
+#     current stable version from the release API and rewrite the cask's
+#     `version` + `sha256` (the sha256 is computed from the published DMG).
+# Commits on change so `brew install --cask ottto-ai/tap/ottto-app` matches stable.
 # Runs on a schedule (safety net) and on demand. For an immediate sync right
 # after a release promotion, trigger it with:
 #   gh workflow run sync-formula.yml -R ottto-ai/homebrew-tap
@@ -25,22 +30,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pull published formula and commit if changed
+      - name: Pull published formula + cask and commit if changed
         env:
           FORMULA_URL: https://install.ottto.net/ottto-local-platform/releases/stable/latest/homebrew/ottto.rb
+          RELEASE_API: https://api.ottto.net/api/v1/local-platform/release
         run: |
           set -euo pipefail
+
+          # --- Formula (CLI) -------------------------------------------------
+          # The release pipeline publishes a ready-made formula; copy it verbatim.
           curl -fsS "$FORMULA_URL" -o /tmp/ottto.rb
           # sanity: the published artifact must look like the Ottto formula
           grep -q 'class Ottto < Formula' /tmp/ottto.rb || { echo "fetched formula failed sanity check" >&2; exit 1; }
           ver="$(grep -E '^[[:space:]]*version "' /tmp/ottto.rb | head -1 | sed -E 's/.*version "([^"]+)".*/\1/')"
           [ -n "$ver" ] || { echo "could not parse version from fetched formula" >&2; exit 1; }
           if cmp -s /tmp/ottto.rb Formula/ottto.rb; then
-            echo "Formula already current at $ver"; exit 0
+            echo "Formula already current at $ver"
+          else
+            cp /tmp/ottto.rb Formula/ottto.rb
+            echo "Formula updated to $ver"
           fi
-          cp /tmp/ottto.rb Formula/ottto.rb
+
+          # --- Cask (macOS desktop app) --------------------------------------
+          # No published cask artifact exists, so derive version + sha256 here:
+          # the stable version comes from the release API (the same source the
+          # cask's livecheck uses), and the sha256 is computed from the DMG.
+          cask_ver="$(curl -fsS "$RELEASE_API" | jq -er '.latest_version')"
+          [ -n "$cask_ver" ] || { echo "could not read latest_version from release API" >&2; exit 1; }
+          # Constrain to a plain semver so the value can't break the sed below or
+          # smuggle anything unexpected into the URL it gets interpolated into.
+          echo "$cask_ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$' || { echo "release API returned an unexpected version: $cask_ver" >&2; exit 1; }
+          dmg_url="https://install.ottto.net/ottto-local-platform/releases/stable/${cask_ver}/Ottto-macos-arm64.dmg"
+          curl -fsSL "$dmg_url" -o /tmp/ottto-app.dmg
+          cask_sha="$(sha256sum /tmp/ottto-app.dmg | awk '{print $1}')"
+          [ -n "$cask_sha" ] || { echo "could not compute DMG sha256" >&2; exit 1; }
+
+          # Rewrite the cask's top-level version + sha256 in place. The url line
+          # uses #{version} interpolation, so only these two fields need editing.
+          sed -i -E "s|^([[:space:]]*version )\"[^\"]*\"|\1\"${cask_ver}\"|" Casks/ottto-app.rb
+          sed -i -E "s|^([[:space:]]*sha256 )\"[^\"]*\"|\1\"${cask_sha}\"|" Casks/ottto-app.rb
+          # Fail loudly if either rewrite was a no-op (e.g. the field moved/renamed)
+          # rather than silently committing a stale cask.
+          grep -q "^  version \"${cask_ver}\"\$" Casks/ottto-app.rb || { echo "cask version rewrite failed" >&2; exit 1; }
+          grep -q "^  sha256 \"${cask_sha}\"\$" Casks/ottto-app.rb || { echo "cask sha256 rewrite failed" >&2; exit 1; }
+          echo "Cask resolved to $cask_ver ($cask_sha)"
+
+          # --- Commit if anything changed ------------------------------------
           git config user.name "ottto-release-bot"
           git config user.email "noreply@ottto.net"
-          git add Formula/ottto.rb
+          git add Formula/ottto.rb Casks/ottto-app.rb
+          if git diff --cached --quiet; then
+            echo "Already current (formula $ver, cask $cask_ver); nothing to commit"
+            exit 0
+          fi
           git commit -m "ottto $ver (auto-synced from stable/latest)"
           git push
