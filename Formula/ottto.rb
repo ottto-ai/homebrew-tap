@@ -1,19 +1,19 @@
-# Generated from ottto-local-platform 0.1.101 (stable).
+# Generated from ottto-local-platform 0.1.102 (stable).
 # Do not hand-edit: run tools/ottto-local-platform/scripts/homebrew_formula.sh.
 class Ottto < Formula
   desc "Local Ottto CLI and per-user service"
   homepage "https://ottto.net"
-  url "https://install.ottto.net/ottto-local-platform/releases/stable/0.1.101/ottto-macos-arm64.zip"
-  version "0.1.101"
-  sha256 "d8d6b8bdaa9be8cbef57eb4a4fc74f259de917cd81fe8d502cb70e8efcd85db6"
+  url "https://install.ottto.net/ottto-local-platform/releases/stable/0.1.102/ottto-macos-arm64.zip"
+  version "0.1.102"
+  sha256 "d1451e9ca448048ac8b60f768171b728619514031721ead7462433eec879c009"
   license "Apache-2.0"
 
   depends_on arch: :arm64
   depends_on macos: :sonoma
 
   resource "ottto-service" do
-    url "https://install.ottto.net/ottto-local-platform/releases/stable/0.1.101/ottto-service-macos-arm64.zip"
-    sha256 "74b666dbdebf9fcf9fc402fc8ceb7ecd4618b77ff792b83caf1ea94c2e1c7d70"
+    url "https://install.ottto.net/ottto-local-platform/releases/stable/0.1.102/ottto-service-macos-arm64.zip"
+    sha256 "80338226c49b813469b45dfe6cf25471ad439dfe7b3c4f8ae13df8a92b6db144"
   end
 
   def install
