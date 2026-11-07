@@ -1,6 +1,6 @@
 cask "ottto-app" do
-  version "0.1.231"
-  sha256 "2e4189ae9fdac533175d4e563f70fc27fca7d51827ca50221ca03f2296732531"
+  version "0.1.232"
+  sha256 "102a0bf02654c053fa3815defb90627f9970442b2ffa5585e32f8a631c20ab05"
 
   url "https://install.ottto.net/ottto-local-platform/releases/stable/#{version}/Ottto-macos-arm64.dmg"
   name "Ottto"
