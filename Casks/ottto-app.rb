@@ -60,5 +60,7 @@ cask "ottto-app" do
   caveats <<~EOS
     If Ottto was not running when it was upgraded, open Ottto to start its
     background service again.
+
+    This cask needs Homebrew 6.0.16 or newer.
   EOS
 end
